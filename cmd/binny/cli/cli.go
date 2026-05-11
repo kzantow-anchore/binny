@@ -67,6 +67,10 @@ func New(id clio.Identification) clio.Application {
 		command.Run(app),
 		command.Update(app),
 		command.List(app),
+		command.Path(app),
+		clio.ConfigCommand(app, clio.DefaultConfigCommandConfig().
+			WithReplaceHomeDirWithTilde(true).
+			WithIncludeLocationsSubcommand(true)),
 	)
 
 	return app
