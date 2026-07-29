@@ -1,0 +1,29 @@
+{
+  "name": "binny-dev",
+  "dockerComposeFile": ["compose.yaml", "compose-claude.yaml", "compose-docker-sock.yaml"],
+  "service": "dev",
+  "containerUser": "dev",
+  "remoteUser": "dev",
+  "workspaceFolder": "/src",
+  "overrideCommand": true,
+  // "features": {
+  //   "ghcr.io/devcontainers/features/node:1": {},
+  //   "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  // },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "ms-python.python"
+      ],
+      "settings": {
+      }
+    },
+    "jetbrains": {
+      "plugins": [
+        "org.jetbrains.plugins.go",
+        "Pythonid"
+      ]
+    }
+  }
+}

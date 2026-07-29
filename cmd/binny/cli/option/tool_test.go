@@ -8,6 +8,65 @@ import (
 	"github.com/anchore/binny/tool/githubrelease"
 )
 
+func TestBySpecificity(t *testing.T) {
+	tests := []struct {
+		name        string
+		credentials map[string]string
+		want        []string
+	}{
+		{
+			name: "orders most- to least-specific",
+			credentials: map[string]string{
+				"":                       "empty",
+				"*":                      "star",
+				"ghcr.io/*":              "broad",
+				"push ghcr.io/*":         "verb-domain",
+				"push ghcr.io/anchore/*": "verb-domain-org",
+				"foo bar":                "literal",
+			},
+			want: []string{
+				"push ghcr.io/anchore/*",
+				"push ghcr.io/*",
+				"ghcr.io/*",
+				"foo bar",
+				// "" and "*" tie on score; longer pattern sorts first.
+				"*",
+				"",
+			},
+		},
+		{
+			name: "same score, longer pattern wins tie-break",
+			credentials: map[string]string{
+				"a*":  "short",
+				"ab*": "long",
+			},
+			want: []string{"ab*", "a*"},
+		},
+		{
+			name: "same score and length, reverse-alphabetical tie-break for determinism",
+			credentials: map[string]string{
+				"a*": "first",
+				"b*": "second",
+			},
+			want: []string{"b*", "a*"},
+		},
+		{
+			name:        "empty input yields nothing",
+			credentials: map[string]string{},
+			want:        nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []string
+			for pattern := range bySpecificity(tt.credentials) {
+				got = append(got, pattern)
+			}
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestDeriveInstallParameters_GithubRelease(t *testing.T) {
 	tests := []struct {
 		name      string

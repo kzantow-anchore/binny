@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/hashicorp/go-multierror"
@@ -38,8 +39,8 @@ func Install(app clio.Application) *cobra.Command {
 	var names []string
 
 	return app.SetupCommand(&cobra.Command{
-		Use:   "install",
-		Short: "Install tools",
+		Use:   "install [NAME...]",
+		Short: "Install tools (optionally only named)",
 		Args:  cobra.ArbitraryArgs,
 		PreRunE: func(_ *cobra.Command, args []string) error {
 			names = args
@@ -51,10 +52,13 @@ func Install(app clio.Application) *cobra.Command {
 	}, cfg)
 }
 
-func runInstall(ctx context.Context, cmdCfg InstallConfig, names []string) error { //nolint: funlen
-	names, toolOpts := selectNamesAndConfigs(cmdCfg.Core, names)
+func runInstall(ctx context.Context, cmdCfg InstallConfig, requestedNames []string) error { //nolint: funlen
+	names, toolOpts := selectNamesAndConfigs(cmdCfg.Core, requestedNames)
 
 	if len(toolOpts) == 0 {
+		if len(requestedNames) > 0 {
+			return fmt.Errorf("no tool configured with name(s): %s", strings.Join(requestedNames, ", "))
+		}
 		bus.Report("no tools to install")
 		log.Warn("no tools to install")
 		return nil
@@ -116,7 +120,7 @@ func runInstall(ctx context.Context, cmdCfg InstallConfig, names []string) error
 	}
 
 	// note: we can ignore the error here because we are tracking the error through the multierror object
-	g.Wait() //nolint: errcheck
+	_ = g.Wait()
 
 	alreadyInstalled = len(alreadyInstalledTools) > 0 && len(alreadyInstalledTools) == len(toolOpts)
 

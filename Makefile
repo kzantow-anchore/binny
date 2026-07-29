@@ -15,4 +15,4 @@ make-default:
 .PHONY: *
 .DEFAULT:
 %:
-	@go run -C .make . $@
+	@exec go run -C .make . $@

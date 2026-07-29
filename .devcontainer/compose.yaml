@@ -1,0 +1,36 @@
+name: binny-dev
+
+services:
+  dev:
+    working_dir: ${SRC:-/src}
+    # platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+    privileged: false
+    cap_add:
+      - SYS_PTRACE
+    ports:
+      - 4000:4000 # for golang debugging
+    environment:
+      BINNY_ROOT: /home/dev/.tool
+      BINNY_HOST: host.docker.internal
+    volumes:
+      - ~/.binny/port:/home/dev/.binny/port:ro
+      - ~/.binny/.key.pub:/home/dev/.binny/.key.pub
+      - ~/.devcontainer-cache/go/:/home/dev/go/
+      - ~/.devcontainer-cache/.cache/:/home/dev/.cache/
+      - ${SRC:-../../}:${SRC:-/src/}
+      - ../:/binny/:ro # always have a binny directory available to build a binny client
+      # we need to remove this in favor of binny docker proxy but it doesn't work for filesystem-related commands
+      - /var/run/docker.sock:/var/run/docker.sock
+    tmpfs:
+      - /tmp:exec,mode=777 # exec permissions so "go run" works the first time
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - dev
+
+networks:
+  dev:
+    driver: bridge

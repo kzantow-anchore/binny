@@ -1,0 +1,5 @@
+services:
+  dev:
+    volumes:
+      # we need to remove this in favor of binny docker proxy but it doesn't work for filesystem-related commands
+      - /var/run/docker.sock:/var/run/docker.sock

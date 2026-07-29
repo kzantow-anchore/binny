@@ -5,8 +5,7 @@ import (
 	"os/exec"
 )
 
-func run(path string, args []string) error {
-	c := exec.Command(path, args...)
+func runOnPlatform(c *exec.Cmd) error {
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	return c.Run()

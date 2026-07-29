@@ -34,3 +34,21 @@ func Apply(value string) string {
 	}
 	return store.RedactString(value)
 }
+
+// Preview returns a short, log-safe preview of v that always blanks out
+// the middle.
+// Very short values are not shown at all
+// Medium values reveal only the first characters; longer ones
+// reveal four chars at each end, so distinct tokens are still
+// distinguishable in logs. Empty input yields an empty string.
+func Preview(v string) string {
+	const middle = "••••••••"
+	switch {
+	case len(v) <= 2:
+		return ""
+	case len(v) <= 16:
+		return v[:2] + middle
+	default:
+		return v[:4] + middle + v[len(v)-4:]
+	}
+}

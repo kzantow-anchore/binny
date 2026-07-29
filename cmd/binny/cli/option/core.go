@@ -10,6 +10,7 @@ type Core struct {
 	CooldownRaw any          `json:"cooldown" yaml:"cooldown,omitempty" mapstructure:"cooldown"`
 	Cooldown    JSONDuration `json:"-" yaml:"-" mapstructure:"-"`
 	Tools       Tools        `json:"tools" yaml:"tools" mapstructure:"tools"`
+	Credentials Credentials  `json:"credentials" yaml:"credentials,omitempty" mapstructure:"credentials"`
 }
 
 func DefaultCore() Core {

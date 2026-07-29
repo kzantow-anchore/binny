@@ -289,6 +289,45 @@ If the URL refers to either `github.com` or `raw.githubusercontent.com` then the
 Otherwise, the version resolver must be specified manually.
 
 
+#### `lookup`
+
+The `lookup` install method finds an existing executable on the user's `PATH` and records its absolute path in the store rather than copying it. The discovered binary is hashed just like a locally installed tool, so binny can detect if it later changes. This is useful when a tool is already provided by the system or a base image (such as inside a devcontainer) and binny should simply track it alongside other managed tools rather than re-downloading or re-building it.
+
+| Option                   | Description                                                                                              |
+|--------------------------|----------------------------------------------------------------------------------------------------------|
+| `name` (optional)        | The executable name to look up. Defaults to the tool name.                                               |
+| `path` (optional)        | A direct path to the executable. When set, `PATH` and `search-paths` are not searched.                   |
+| `search-paths` (optional) | Additional directories searched (in order) ahead of `PATH`.                                             |
+
+Example:
+
+```yaml
+- name: docker
+  version:
+    want: current
+  method: lookup
+
+# use a direct path to the binary
+- name: kubectl
+  version:
+    want: current
+  method: lookup
+  with:
+    path: /opt/tools/kubectl
+
+# search additional directories before PATH
+- name: helm
+  version:
+    want: current
+  method: lookup
+  with:
+    search-paths:
+      - /opt/tools/bin
+```
+
+The default version resolver for this method is `lookup`.
+
+
 
 ### Version Resolver Methods
 
@@ -305,7 +344,7 @@ The `git` version method will use a git repo on disk as a source for resolving v
 The `version.want` option allows a special entry:
 - `current`: use the current commit checked out in the repo
 
-**note**: this method is still under development. Currently it is most useful for tools that are being used where that are developed:
+**note**: this method is still under development. Currently it is most useful for tools that are being used where they are developed:
 
 ```yaml
   - name: binny
@@ -351,3 +390,20 @@ The `go-proxy` version method reaches out to `proxy.golang.org` to determine the
 
 The `version.want` option allows a special entry:
 - `latest`: don't pin to a version, use the latest available
+
+#### `lookup`
+
+The `lookup` version method runs an executable found on the user's `PATH` and extracts a version string from its output. This is the default resolver paired with the `lookup` install method.
+
+| Option             | Description                                                                                                                                                |
+|--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `name` (optional)  | The executable name to look up. Defaults to the tool name.                                                                                                 |
+| `path` (optional)  | A direct path to the executable. When set, `PATH` and `search-paths` are not searched.                                                                     |
+| `search-paths` (optional) | Additional directories searched (in order) ahead of `PATH`.                                                                                        |
+| `args` (optional)  | The args used to print version information (defaults to `["--version"]`).                                                                                  |
+| `pattern` (optional) | A regular expression used to extract the version from the command output. If the regex has a capture group, the first capture is used; otherwise the full match is used. Defaults to a regex that matches a typical dotted-numeric version. |
+
+The `version.want` option allows special entries:
+- `current` (or `latest`, or empty): use whatever version the executable reports right now.
+
+When `version.want` is set to a concrete value (e.g. `1.2.3`) the resolver returns that value verbatim without running the executable.

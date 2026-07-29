@@ -13,6 +13,7 @@ import (
 	"github.com/anchore/binny/tool/goinstall"
 	"github.com/anchore/binny/tool/goproxy"
 	"github.com/anchore/binny/tool/hostedshell"
+	"github.com/anchore/binny/tool/lookup"
 )
 
 var _ binny.Tool = (*compositeTool)(nil)
@@ -102,6 +103,13 @@ func getInstaller(method string, installParams any) (installer binny.Installer, 
 		}
 
 		installer = githubrelease.NewInstaller(params)
+	case lookup.IsInstallMethod(method):
+		params, ok := installParams.(lookup.InstallerParameters)
+		if !ok {
+			return nil, fmt.Errorf("invalid lookup install parameters")
+		}
+
+		installer = lookup.NewInstaller(params)
 	}
 
 	if err != nil {
@@ -131,6 +139,12 @@ func getResolver(method string, params any) (resolver binny.VersionResolver, err
 			return nil, fmt.Errorf("invalid git version resolution parameters")
 		}
 		resolver = git.NewVersionResolver(config)
+	case lookup.IsResolveMethod(method):
+		config, ok := params.(lookup.VersionResolutionParameters)
+		if !ok {
+			return nil, fmt.Errorf("invalid lookup version resolution parameters")
+		}
+		resolver = lookup.NewVersionResolver(config)
 	}
 
 	if err != nil {
@@ -142,6 +156,16 @@ func getResolver(method string, params any) (resolver binny.VersionResolver, err
 
 func (c compositeTool) Name() string {
 	return c.config.Name
+}
+
+// IsReference forwards to the underlying installer when it is a
+// binny.ReferenceInstaller, so the install flow can detect tools that should be
+// referenced in place rather than copied into the store.
+func (c compositeTool) IsReference() bool {
+	if r, ok := c.Installer.(binny.ReferenceInstaller); ok {
+		return r.IsReference()
+	}
+	return false
 }
 
 func (c compositeTool) ID() string {
@@ -166,6 +190,8 @@ func defaultVersionResolverConfig(installMethod string, installParams any) (meth
 		return hostedshell.DefaultVersionResolverConfig(installParams)
 	case githubrelease.IsInstallMethod(installMethod):
 		return githubrelease.DefaultVersionResolverConfig(installParams)
+	case lookup.IsInstallMethod(installMethod):
+		return lookup.DefaultVersionResolverConfig(installParams)
 	}
 
 	return "", nil, nil

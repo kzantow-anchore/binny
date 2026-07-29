@@ -4,6 +4,7 @@
 /.tool
 /.task
 /bin
+/work
 
 # local development
 .claude

@@ -1,0 +1,9 @@
+services:
+  dev:
+    build:
+      args:
+        INSTALL_CLAUDE: "true"
+    environment:
+      CLAUDE_CONFIG_DIR: /home/dev/.claude/
+    volumes:
+      - ~/.devcontainer-cache/.claude/:/home/dev/.claude/

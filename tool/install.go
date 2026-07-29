@@ -68,8 +68,14 @@ func Install(ctx context.Context, tool binny.Tool, intent binny.VersionIntent, s
 
 	stage.Set("storing")
 
-	// if the installation was successful, add the tool to the store
-	if err = store.AddTool(tool.Name(), resolvedVersion, binPath); err != nil {
+	// if the installation was successful, add the tool to the store. Reference
+	// installers return the path of an existing executable that should be
+	// recorded in place rather than moved into the store.
+	if ref, ok := tool.(binny.ReferenceInstaller); ok && ref.IsReference() {
+		if err = store.AddReference(tool.Name(), resolvedVersion, binPath); err != nil {
+			return err
+		}
+	} else if err = store.AddTool(tool.Name(), resolvedVersion, binPath); err != nil {
 		return err
 	}
 

@@ -34,6 +34,9 @@ type Store struct {
 	lock    *sync.RWMutex
 }
 
+// StoreOption configures a Store at construction.
+type StoreOption func(*Store)
+
 type state struct {
 	Entries []StoreEntry `json:"entries"`
 }
@@ -42,19 +45,26 @@ type StoreEntry struct {
 	root             string
 	Name             string            `json:"name"`
 	InstalledVersion string            `json:"version"`
-	Digests          map[string]string `json:"digests"`
-	PathInRoot       string            `json:"path"`
+	Digests          map[string]string `json:"digests,omitempty"`
+	PathInRoot       string            `json:"path,omitempty"`
 }
 
 func (e StoreEntry) Path() string {
+	if filepath.IsAbs(e.PathInRoot) {
+		return e.PathInRoot
+	}
 	return filepath.Join(e.root, e.PathInRoot)
 }
 
-func NewStore(root string) (*Store, error) {
+func NewStore(root string, opts ...StoreOption) (*Store, error) {
 	s := &Store{
 		root:    root,
 		entries: []StoreEntry{},
 		lock:    &sync.RWMutex{},
+	}
+
+	for _, opt := range opts {
+		opt(s)
 	}
 
 	return s, s.loadState()
@@ -176,6 +186,47 @@ func (s *Store) AddTool(toolName string, resolvedVersion, pathOutsideRoot string
 	log.WithFields("tool", toolName, "sha256", sha256Hash, pathOutsideRoot).Trace("adding new tool store entry")
 
 	s.entries = append(s.entries, fileInfo)
+	return s.saveState()
+}
+
+// AddReference records a tool that lives at an existing absolute path (e.g.
+// discovered on PATH) without copying it into the store. The binary is hashed
+// exactly like a locally installed tool so that subsequent changes to it can be
+// detected during verification.
+func (s *Store) AddReference(toolName string, resolvedVersion, absPath string) error {
+	log.WithFields("tool", toolName, "path", absPath).Trace("adding referenced tool to store")
+
+	if err := s.loadState(); err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(s.root); os.IsNotExist(err) {
+		if err := os.MkdirAll(s.root, 0755); err != nil {
+			return err
+		}
+	}
+
+	digests, err := getDigestsForFile(absPath)
+	if err != nil {
+		return err
+	}
+
+	entry := StoreEntry{
+		root:             s.root,
+		Name:             toolName,
+		InstalledVersion: resolvedVersion,
+		Digests:          digests,
+		PathInRoot:       absPath,
+	}
+
+	for i, existing := range s.entries {
+		if existing.Name == toolName {
+			s.entries[i] = entry
+			return s.saveState()
+		}
+	}
+
+	s.entries = append(s.entries, entry)
 	return s.saveState()
 }
 
