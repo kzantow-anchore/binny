@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/anchore/binny/cmd/binny/cli"
 	"github.com/anchore/clio"
 )
@@ -33,9 +31,4 @@ func main() {
 	)
 
 	app.Run()
-
-	// app.Run() only calls os.Exit for its own error path; mirror a wrapped
-	// tool's non-zero exit status here so `docker …` (resolved to binny) returns
-	// the same code the real docker would have.
-	os.Exit(cli.ExitCode())
 }

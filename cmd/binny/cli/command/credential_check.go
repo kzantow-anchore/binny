@@ -30,6 +30,7 @@ func resolveCredentials(ctx context.Context, cfg CredentialCheckConfig, command 
 	log.Debugf("looking up local credentials for %q", command)
 	r := authserver.NewResolver(option.CredentialMatcher{Tools: cfg.Tools, Credentials: cfg.Credentials}, "")
 	r.SetToolPathResolver(newToolPathFinder(InstallConfig{Core: cfg.Core}, cfg.Tools))
+	r.SetNotifier(authserver.DesktopNotifier)
 	resolved, err := r.ResolveCommand(ctx, command)
 	if err != nil {
 		return authserver.ResolvedCredentials{}, fmt.Errorf("resolving credentials locally: %w", err)

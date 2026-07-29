@@ -109,6 +109,15 @@ func WithNotifications(enabled bool) Option {
 	}
 }
 
+// notifier returns the Notifier the server's resolver should use: the desktop
+// notifier when notifications are enabled, nil (disabled) otherwise.
+func (s *Server) notifier() Notifier {
+	if s.notifications {
+		return DesktopNotifier
+	}
+	return nil
+}
+
 // WithApproval installs the host-side approval gate: each op:///enc:// value-ref
 // must be confirmed by the user via prompter before it is resolved, and an
 // approval is cached for ttl (clamped to [1m,10m]). When autoApprove is true the
@@ -173,7 +182,7 @@ func New(dir string, opts ...Option) (*Server, error) {
 	}
 	s.resolver = NewResolver(s.commands, s.password)
 	s.resolver.SetToolPathResolver(s.toolPath)
-	s.resolver.SetNotifications(s.notifications)
+	s.resolver.SetNotifier(s.notifier())
 	s.resolver.SetApprovals(s.approvals)
 
 	s.srv = &http.Server{
@@ -254,7 +263,7 @@ func (s *Server) currentResolver() *Resolver {
 			s.toolPath = toolPath
 			s.resolver = NewResolver(commands, s.password)
 			s.resolver.SetToolPathResolver(toolPath)
-			s.resolver.SetNotifications(s.notifications)
+			s.resolver.SetNotifier(s.notifier())
 			// Reuse the existing approval cache so approvals granted before the
 			// reload are not forgotten when the config changes.
 			s.resolver.SetApprovals(s.approvals)

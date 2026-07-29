@@ -2,7 +2,6 @@ package authserver
 
 import (
 	"context"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -10,13 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMain replaces the desktop notifier with a no-op for the whole package so
-// running `go test ./...` doesn't spam the developer with banners. Tests that
-// care about notification behavior call installCapture to record calls.
-func TestMain(m *testing.M) {
-	notify = func(string, string, any) error { return nil }
-	os.Exit(m.Run())
-}
+// A Resolver has no notifier unless one is installed, so tests never fire real
+// desktop notifications. Tests that care about notification behavior install a
+// capturedNotify via SetNotifier to record calls.
 
 type capturedNotify struct {
 	mu    sync.Mutex
@@ -28,7 +23,7 @@ type capturedCall struct {
 	message string
 }
 
-func (c *capturedNotify) fn(title, message string, _ any) error {
+func (c *capturedNotify) fn(title, message string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.calls = append(c.calls, capturedCall{title: title, message: message})
@@ -43,18 +38,15 @@ func (c *capturedNotify) snapshot() []capturedCall {
 	return out
 }
 
-// installCapture swaps the package-level notify function for the duration of t.
-func installCapture(t *testing.T) *capturedNotify {
+// installCapture installs a recording notifier on r and returns it.
+func installCapture(t *testing.T, r *Resolver) *capturedNotify {
 	t.Helper()
-	prev := notify
 	cap := &capturedNotify{}
-	notify = cap.fn
-	t.Cleanup(func() { notify = prev })
+	r.SetNotifier(cap.fn)
 	return cap
 }
 
 func TestNotify_FiresWhenOpRefInEnv(t *testing.T) {
-	cap := installCapture(t)
 	cmd := fakeCommandLookup{cc: CommandCredentials{
 		Name: "some-credential-name",
 		Env: []EnvBinding{
@@ -62,6 +54,7 @@ func TestNotify_FiresWhenOpRefInEnv(t *testing.T) {
 		},
 	}}
 	r := NewResolver(cmd, "")
+	cap := installCapture(t, r)
 	_, err := r.ResolveCommand(context.Background(), []string{"gh", "auth", "status"})
 	require.NoError(t, err)
 
@@ -75,11 +68,11 @@ some-credential-name
 }
 
 func TestNotify_FiresWhenOpRefInDocker(t *testing.T) {
-	cap := installCapture(t)
 	cmd := fakeCommandLookup{cc: CommandCredentials{
 		Docker: &DockerRef{Username: "literal", Password: "op://Vault/Item/Secret"},
 	}}
 	r := NewResolver(cmd, "")
+	cap := installCapture(t, r)
 	_, err := r.ResolveCommand(context.Background(), []string{"docker", "push", "ghcr.io/foo"})
 	require.NoError(t, err)
 
@@ -89,12 +82,12 @@ func TestNotify_FiresWhenOpRefInDocker(t *testing.T) {
 }
 
 func TestNotify_SkipsWhenAllLiteral(t *testing.T) {
-	cap := installCapture(t)
 	cmd := fakeCommandLookup{cc: CommandCredentials{
 		Env:    []EnvBinding{{Key: "GH_TOKEN", Token: "ghp_literal"}},
 		Docker: &DockerRef{Username: "user", Password: "pass"},
 	}}
 	r := NewResolver(cmd, "")
+	cap := installCapture(t, r)
 	_, err := r.ResolveCommand(context.Background(), []string{"gh"})
 	require.NoError(t, err)
 
@@ -106,12 +99,12 @@ func TestNotify_SkipsWhileApprovalDialogShown(t *testing.T) {
 	// dialog is itself the notification, so no desktop notification should fire.
 	// The second resolve is served silently from the approval cache, so it
 	// should notify.
-	cap := installCapture(t)
 	cmd := fakeCommandLookup{cc: CommandCredentials{
 		Name: "some-credential-name",
 		Env:  []EnvBinding{{Key: "GH_TOKEN", Token: "op://Vault/Item/Token"}},
 	}}
 	r := NewResolver(cmd, "")
+	cap := installCapture(t, r)
 	r.SetApprovals(newApprovalCache(DefaultApprovalTTL, false, &fakePrompter{allow: true}))
 
 	// first request: prompted (dialog shown) → no notification
@@ -127,12 +120,12 @@ func TestNotify_SkipsWhileApprovalDialogShown(t *testing.T) {
 
 func TestNotify_SkipsWhenDenied(t *testing.T) {
 	// A denied credential resolves nothing, so no notification should fire.
-	cap := installCapture(t)
 	cmd := fakeCommandLookup{cc: CommandCredentials{
 		Name: "some-credential-name",
 		Env:  []EnvBinding{{Key: "GH_TOKEN", Token: "op://Vault/Item/Token"}},
 	}}
 	r := NewResolver(cmd, "")
+	cap := installCapture(t, r)
 	r.SetApprovals(newApprovalCache(DefaultApprovalTTL, false, &fakePrompter{allow: false}))
 
 	_, err := r.ResolveCommand(context.Background(), []string{"gh", "auth", "status"})
@@ -143,11 +136,11 @@ func TestNotify_SkipsWhenDenied(t *testing.T) {
 func TestNotify_SkipsWhenOnlyEncRef(t *testing.T) {
 	// enc:// stays local — no biometric prompt, no shell-out — so no
 	// notification is needed.
-	cap := installCapture(t)
 	cmd := fakeCommandLookup{cc: CommandCredentials{
 		Env: []EnvBinding{{Key: "X", Token: encPrefix + "abc"}},
 	}}
 	r := NewResolver(cmd, "")
+	cap := installCapture(t, r)
 	_, err := r.ResolveCommand(context.Background(), []string{"any"})
 	require.NoError(t, err)
 

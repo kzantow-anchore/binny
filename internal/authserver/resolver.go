@@ -75,17 +75,18 @@ type Resolver struct {
 	cmdLookup CredentialFinder
 	toolPath  ToolResolver
 	password  string
-	// notifications controls whether an external (op://) resolve fires a desktop
-	// notification. Enabled by default; disabled for headless/test servers.
-	notifications bool
+	// notifier fires a desktop notification when an external (op://) resolve
+	// happens silently. Nil disables notifications (the default; production
+	// callers install DesktopNotifier).
+	notifier Notifier
 	// approvals gates resolution of each value-ref behind a host-side
 	// confirmation. Nil means no gate (resolve unconditionally).
 	approvals *approvalCache
 }
 
-// NewResolver constructs a Resolver; pass password="" when none was supplied (enc:// will then error, op:// and literals still work). Desktop notifications are enabled by default.
+// NewResolver constructs a Resolver; pass password="" when none was supplied (enc:// will then error, op:// and literals still work). Desktop notifications are disabled until SetNotifier installs one.
 func NewResolver(cmdLookup CredentialFinder, password string) *Resolver {
-	return &Resolver{cmdLookup: cmdLookup, password: password, notifications: true}
+	return &Resolver{cmdLookup: cmdLookup, password: password}
 }
 
 // SetApprovals installs the approval gate consulted before each op:///enc://
@@ -105,12 +106,12 @@ func (r *Resolver) SetToolPathResolver(l ToolResolver) {
 	r.toolPath = l
 }
 
-// SetNotifications enables or disables desktop notifications for external (op://) resolves.
-func (r *Resolver) SetNotifications(enabled bool) {
+// SetNotifier installs the notifier fired for silent external (op://) resolves; nil disables notifications.
+func (r *Resolver) SetNotifier(n Notifier) {
 	if r == nil {
 		return
 	}
-	r.notifications = enabled
+	r.notifier = n
 }
 
 // ResolveCommand resolves every value-ref for command to plaintext; broken individual refs are logged and skipped.
@@ -165,8 +166,8 @@ func (r *Resolver) ResolveCommand(ctx context.Context, command []string) (Resolv
 		silent = silent || silentDocker
 	}
 
-	if r.notifications && silent {
-		notifyExternalResolve(command, cc)
+	if r.notifier != nil && silent {
+		notifyExternalResolve(r.notifier, command, cc)
 	}
 	return out, nil
 }

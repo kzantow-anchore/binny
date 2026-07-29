@@ -20,14 +20,14 @@ import (
 	"github.com/anchore/clio"
 )
 
-// DockerHelperUse is the cobra Use string; also referenced by the
-// docker-credential-binny symlink dispatch in cli/cli.go.
+// DockerHelperUse is the cobra Use string; also referenced by the wrapper
+// script staged by `binny run` (see stageDockerCredHelper).
 const DockerHelperUse = "docker-helper"
 
 // DockerCredentialHelperName is the binary basename docker expects for the
 // binny-managed credential helper (configured as `credsStore: binny` in the
-// staged docker config.json). It is shared between the symlink-dispatch logic
-// in cli/cli.go and the staged-config symlink created by `binny run`.
+// staged docker config.json). The wrapper script staged by `binny run` uses
+// this name so docker can discover it on PATH.
 //
 //nolint:gosec // this is the credential helper name, not a credential
 const DockerCredentialHelperName = "docker-credential-binny"

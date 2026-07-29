@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -160,14 +161,11 @@ func runRunRUN(ctx context.Context, cfg RunConfig, name string, args []string) e
 	c.Env = env
 
 	if err := runOnPlatform(c); err != nil {
-		// the wrapped tool ran but exited non-zero: mirror its exit code verbatim
-		// and stay silent (the tool already wrote its own diagnostics). Returning
-		// an error here would make clio emit a spurious error line on top of the
-		// tool's own output.
+		// the tool ran but exited non-zero: return a ToolExitError so clio mirrors
+		// the tool's exit code verbatim (see WithMapExitCode in cli.New).
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			setWrappedExitCode(exitErr.ExitCode())
-			return nil
+			return &ToolExitError{Name: name, Code: exitErr.ExitCode()}
 		}
 		// the tool could not be launched at all (e.g. removed between the check
 		// above and exec): surface it as a not-found so the user learns nothing ran.
@@ -176,9 +174,8 @@ func runRunRUN(ctx context.Context, cfg RunConfig, name string, args []string) e
 	return nil
 }
 
-// errExecutableNotFound is the concise error returned when binny is wrapping a
-// tool (typically invoked via a symlink such as `docker`) but the underlying
-// executable cannot be located. It surfaces as a non-zero exit with a message
+// errExecutableNotFound is the concise error returned when a tool executed via
+// `binny run` cannot be located. It surfaces as a non-zero exit with a message
 // like "executable not found: docker".
 func errExecutableNotFound(name string) error {
 	return fmt.Errorf("executable not found: %s", name)
@@ -245,9 +242,10 @@ func buildToolEnv(ctx context.Context, name string, args []string) (env []string
 			cleanups = append(cleanups, func() { _ = os.RemoveAll(dir) })
 			envOut["DOCKER_CONFIG"] = dir
 			// docker discovers `docker-credential-binny` by name on PATH; the
-			// staged dir holds a symlink to the running binny binary so docker
-			// can dispatch into the helper subcommand without requiring binny
-			// to have been pre-installed on PATH inside the tool's environment.
+			// staged dir holds a wrapper script that invokes the running binny
+			// binary's `credential docker-helper` subcommand, so docker can
+			// dispatch into the helper without requiring binny to have been
+			// pre-installed on PATH inside the tool's environment.
 			envOut["PATH"] = prependPath(os.Getenv("PATH"), dir)
 
 			pipePath, stopPipe, err := startDockerCredPipe(dir, resolved.Docker)
@@ -277,8 +275,8 @@ func buildToolEnv(ctx context.Context, name string, args []string) (env []string
 }
 
 // stageDockerConfig writes a temporary docker config.json that delegates all
-// credential lookups to docker-credential-binny, plus a symlink in the same
-// directory pointing the helper name at the currently running binny binary.
+// credential lookups to docker-credential-binny, plus a wrapper script in the
+// same directory dispatching the helper name to the currently running binny binary.
 func stageDockerConfig() (string, error) {
 	dir, err := os.MkdirTemp("", "binny-docker-")
 	if err != nil {
@@ -346,10 +344,8 @@ func prependPath(existing, dir string) string {
 	if existing == "" {
 		return dir
 	}
-	for _, p := range strings.Split(existing, sep) {
-		if p == dir {
-			return existing
-		}
+	if slices.Contains(strings.Split(existing, sep), dir) {
+		return existing
 	}
 	return dir + sep + existing
 }
